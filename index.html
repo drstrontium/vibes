@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Happy Birthday — Epic Cat Party</title>
+  <meta name="description" content="An interactive, performant birthday experience — confetti, fireworks, balloons, and a joyful cat. Accessible, responsive, and optimized." />
+  <meta name="color-scheme" content="light dark" />
+  <style>
+    /* =========================
+       Design tokens & base
+       ========================= */
+    :root{
+      --bg-1:#fff7fb; --bg-2:#f2f9ff; --bg-3:#fff7e8;
+      --surface:#ffffff;
+      --primary:#ff4fa3; --secondary:#6c63ff; --accent:#ffd966;
+      --ink:#0f1113; --muted:#6b6d72;
+      --font: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      --radius:18px;
+      --shadow-sm: 0 8px 30px rgba(0,0,0,.08);
+      --shadow-lg: 0 18px 72px rgba(0,0,0,.14);
+      --ease: cubic-bezier(.22,.61,.36,1);
+      --container:1200px;
+      --h1: clamp(2.6rem, 6vw, 4.6rem);
+      --h2: clamp(1rem, 2.2vw, 1.25rem);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root{
+        --bg-1:#0b0d12; --bg-2:#101426; --bg-3:#121521;
+        --surface:#0f1318; --ink:#f3f5f8; --muted:#b7bac4;
+        --shadow-sm: 0 8px 30px rgba(0,0,0,.6);
+        --shadow-lg: 0 18px 72px rgba(0,0,0,.6);
+      }
+    }
+
+    /* reset & base */
+    *,*::before,*::after{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:var(--font); color:var(--ink); -webkit-font-smoothing:antialiased;
+      background:
+        radial-gradient(1000px 520px at 88% -12%, color-mix(in oklab,var(--secondary) 16%, transparent) 0 40%, transparent 60%),
+        radial-gradient(800px 420px at 12% -6%, color-mix(in oklab,var(--primary) 18%, transparent) 0 35%, transparent 65%),
+        linear-gradient(120deg,var(--bg-1),var(--bg-2),var(--bg-3));
+      background-size:140% 140%;
+      animation: bgFlow 20s linear infinite;
+      -webkit-tap-highlight-color: transparent;
+    }
+    @keyframes bgFlow { 0%{background-position:0% 0%} 50%{background-position:100% 100%} 100%{background-position:0% 0%} }
+
+    a:focus-visible, button:focus-visible, input:focus-visible { outline:3px solid color-mix(in oklab,var(--primary) 48%, black); outline-offset:3px; border-radius:8px }
+
+    .container{max-width:var(--container); margin:0 auto; padding-inline:clamp(16px,4vw,32px)}
+
+    /* =========================
+       Layout & UI
+       ========================= */
+    .topbar{position:sticky; top:0; z-index:60; backdrop-filter:saturate(140%) blur(8px); background: color-mix(in oklab,var(--surface) 84%, transparent); border-bottom:1px solid color-mix(in oklab,var(--ink) 10%, transparent)}
+    .topbar-inner{display:flex; align-items:center; justify-content:space-between; gap:12px; padding:block 12px}
+    .brand{display:flex; align-items:center; gap:10px; font-weight:800}
+    .dot{width:12px;height:12px;border-radius:50%; background:linear-gradient(180deg,var(--primary),var(--secondary)); box-shadow:0 0 0 3px color-mix(in oklab,var(--primary) 28%, transparent)}
+
+    .hero{position:relative; z-index:40; padding-block: clamp(64px,12vw,120px); text-align:center}
+    .title{margin:0; font-size:var(--h1); font-weight:900; color:var(--primary); line-height:1.02; text-shadow:0 12px 40px color-mix(in oklab,var(--primary) 20%, transparent)}
+    .subtitle{margin:12px auto 0; color:var(--muted); max-width:60ch; font-size:var(--h2)}
+
+    .card{margin:28px auto 0; padding:22px; border-radius:var(--radius); background:color-mix(in oklab,var(--surface) 86%, transparent); box-shadow:var(--shadow-lg); max-width:960px; position:relative; overflow:visible}
+
+    /* control chips */
+    .controls{display:flex; gap:10px; justify-content:center; margin-top:14px}
+    .chip{appearance:none;border:0;padding:8px 12px;border-radius:999px;background:transparent;border:1px solid color-mix(in oklab,var(--ink) 8%, transparent); color:var(--muted); cursor:pointer; transition:transform .16s var(--ease)}
+    .chip[aria-pressed="true"]{background:color-mix(in oklab,var(--primary) 12%, transparent); color: color-mix(in oklab,var(--primary) 40%, var(--ink)) }
+    .chip:hover{transform:translateY(-2px)}
+
+    /* balloons (decorative HTML nodes) */
+    .balloon{position:absolute; bottom:12%; width:64px; height:96px; border-radius:48% 48% 50% 50%; display:flex; align-items:center; justify-content:center; pointer-events:none; transform-origin:center bottom; box-shadow:0 10px 32px rgba(0,0,0,.10)}
+    .balloon .string{position:absolute; top:84%; left:50%; transform:translateX(-50%); width:2px; height:110%; background:rgba(0,0,0,.06); border-radius:2px}
+
+    /* canvases for layered FX */
+    .layer{position:fixed; inset:0; pointer-events:none; z-index:10}
+    #spark{z-index:18; opacity:.95}   /* soft sparkle background */
+    #fx{z-index:28}                   /* confetti + fireworks layer */
+
+    footer{padding:48px 0 64px; text-align:center; color:var(--muted)}
+    .final-msg{font-weight:700; font-size:1.03rem; color:var(--ink)}
+
+    /* reduced-motion guard */
+    @media (prefers-reduced-motion: reduce){
+      *{animation:none !important; transition:none !important}
+    }
+  </style>
+</head>
+<body>
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="topbar-inner container" style="display:flex;align-items:center;justify-content:space-between">
+      <div class="brand"><div class="dot" aria-hidden="true"></div><div>Epic Cat Party</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button id="soundBtn" class="chip" aria-pressed="false" title="Enable ambient audio">Sound</button>
+        <button id="confettiBtn" class="chip" aria-pressed="true" title="Toggle confetti">Confetti</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sparkle background (soft, cheap particles) -->
+  <canvas id="spark" class="layer" aria-hidden="true"></canvas>
+
+  <!-- Confetti & fireworks canvas -->
+  <canvas id="fx" class="layer" aria-hidden="true"></canvas>
+
+  <!-- Main hero -->
+  <main class="hero container" id="hero" role="main">
+    <h1 class="title" id="title">Happy Birthday! 🎉</h1>
+    <p class="subtitle">I'm pawsitive you're goated! Click the cat for fireworks!</p>
+
+    <section class="card" aria-label="Birthday scene">
+      <!-- SVG cat (crisp, scalable) -->
+      <div style="display:flex;align-items:center;justify-content:center">
+        <svg id="cat" class="cat" viewBox="0 0 320 320" role="img" aria-label="Smiling party cat">
+          <defs>
+            <linearGradient id="hatG" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff9bd1"/><stop offset="1" stop-color="#ff4fa3"/></linearGradient>
+            <linearGradient id="furG" x1="0" x2="1"><stop offset="0" stop-color="#fbfbfd"/><stop offset="1" stop-color="#eceef6"/></linearGradient>
+          </defs>
+          <path d="M54 110 L104 38 L130 122 Z" fill="#f4f4f8"></path>
+          <path d="M266 110 L216 38 L190 122 Z" fill="#f4f4f8"></path>
+          <circle cx="160" cy="160" r="120" fill="url(#furG)"></circle>
+          <g fill="#121417">
+            <circle cx="120" cy="156" r="12"/><circle cx="200" cy="156" r="12"/>
+          </g>
+          <path d="M160 180 q-8 6 -16 0 q8 10 16 10 q8 0 16 -10 q-8 6 -16 0 Z" fill="#ff9bb6"/>
+          <path d="M124 200 q36 22 72 0" stroke="#121417" stroke-width="4" fill="none" stroke-linecap="round"/>
+          <path d="M80 182 h50" stroke="#121417" stroke-width="4" stroke-linecap="round"/>
+          <path d="M240 182 h-50" stroke="#121417" stroke-width="4" stroke-linecap="round"/>
+          <g id="hatGroup">
+            <path id="hat" d="M160 32 L114 124 L206 124 Z" fill="url(#hatG)"></path>
+            <circle cx="160" cy="26" r="10" fill="#ffd966"></circle>
+          </g>
+          <g id="tailGroup"><path d="M46 226 q-32 18 -12 56 q22 44 68 32" fill="#f0eef6"></path></g>
+        </svg>
+      </div>
+
+      <div class="controls" role="group" aria-label="Actions">
+        <button id="cheerBtn" class="chip">Cheer</button>
+        <button id="balloonsBtn" class="chip">Balloons</button>
+      </div>
+
+      <!-- floating decorative balloons (initial) -->
+      <div class="balloon" id="b1" style="left:8%;background:linear-gradient(180deg,#ff7fc1,#ff4fa3)"><div class="string"></div></div>
+      <div class="balloon" id="b2" style="left:24%;background:linear-gradient(180deg,#8f83ff,#6c63ff);width:72px;height:104px"><div class="string"></div></div>
+      <div class="balloon" id="b3" style="left:78%;background:linear-gradient(180deg,#ffd966,#ffbf4d);width:56px;height:88px"><div class="string"></div></div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container">
+      <div class="final-msg">✨Happy Birthday from Yahya</div>
+    </div>
+  </footer>
+
+  <script>
+    /* ======================================================
+       Production-ready single-file script
+       - DPR-aware pooled canvas particles
+       - reduced-motion support
+       - rAF lifecycle, debounced resize
+       - modular, commented for team handoff
+       ====================================================== */
+
+    (function () {
+      'use strict';
+
+      /* --------------------
+         Configuration & DOM
+         -------------------- */
+      const prefersReduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const fx = document.getElementById('fx'), fxCtx = fx.getContext('2d', { alpha: true });
+      const spark = document.getElementById('spark'), spCtx = spark.getContext('2d', { alpha: true });
+      const cat = document.getElementById('cat');
+      const hatGroup = document.getElementById('hatGroup');
+      const tailGroup = document.getElementById('tailGroup');
+      const soundBtn = document.getElementById('soundBtn');
+      const confettiBtn = document.getElementById('confettiBtn');
+      const cheerBtn = document.getElementById('cheerBtn');
+      const balloonsBtn = document.getElementById('balloonsBtn');
+
+      /* DPR aware sizing */
+      const DPR = Math.min(window.devicePixelRatio || 1, 2);
+      function resize() {
+        const w = innerWidth, h = innerHeight;
+        fx.width = Math.floor(w * DPR); fx.height = Math.floor(h * DPR);
+        fx.style.width = w + 'px'; fx.style.height = h + 'px'; fxCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+        spark.width = Math.floor(w * DPR); spark.height = Math.floor(h * DPR);
+        spark.style.width = w + 'px'; spark.style.height = h + 'px'; spCtx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      }
+      let resizeTimer = 0;
+      window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(resize, 120); }, { passive: true });
+      resize();
+
+      /* --------------------
+         Particle pooling
+         -------------------- */
+      function Pool(factory, initial = 600) {
+        this.pool = [];
+        this.factory = factory;
+        for (let i = 0; i < initial; i++) this.pool.push(factory());
+      }
+      Pool.prototype.acquire = function () { return this.pool.length ? this.pool.pop() : this.factory(); };
+      Pool.prototype.release = function (item) { this.pool.push(item); };
+
+      /* factories */
+      const confFactory = () => ({ x: 0, y: 0, vx: 0, vy: 0, r: 3, rot: 0, vr: 0, color: '#fff', shape: 'square', life: 0 });
+      const fireFactory = () => ({ x: 0, y: 0, vx: 0, vy: 0, r: 1.5, color: '#fff', life: 0, maxLife: 0, shell: false });
+
+      const confPool = new Pool(confFactory, 900);
+      const firePool = new Pool(fireFactory, 800);
+
+      const confetti = []; // active confetti
+      const fireworks = []; // active fireworks + shell particles
+
+      /* --------------------
+         Soft spark field (ambient)
+         -------------------- */
+      const SPARKS = prefersReduced ? 60 : 160;
+      const sparks = new Array(SPARKS).fill(0).map(() => ({
+        x: Math.random() * innerWidth,
+        y: Math.random() * innerHeight,
+        r: Math.random() * 2 + 0.5,
+        a: Math.random() * 0.6 + 0.2,
+        speed: Math.random() * 0.18 + 0.02,
+        sway: Math.random() * 0.6
+      }));
+
+      /* --------------------
+         Particle spawn helpers
+         -------------------- */
+      function spawnConfetti(x, y, count = 60, force = false) {
+        // if confetti toggle is off, skip unless forced
+        if (!confettiOn && !force) return;
+        for (let i = 0; i < count; i++) {
+          const p = confPool.acquire();
+          const a = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 3 + 0.6;
+          p.x = x + (Math.random() - 0.5) * 10;
+          p.y = y + (Math.random() - 0.5) * 8;
+          p.vx = Math.cos(a) * speed * (Math.random() * 0.8 + 0.4);
+          p.vy = Math.sin(a) * speed * (Math.random() * 0.7 + 0.6) - (Math.random() * 3.2);
+          p.r = Math.random() * 5 + 2;
+          p.rot = Math.random() * Math.PI * 2;
+          p.vr = (Math.random() - 0.5) * 0.25;
+          p.color = `hsl(${Math.floor(Math.random() * 360)} 85% 60%)`;
+          p.shape = Math.random() < 0.5 ? 'circle' : 'square';
+          p.life = 0;
+          confetti.push(p);
+        }
+      }
+
+      function launchFirework(targetX, targetY, payload = 28) {
+        const shell = firePool.acquire();
+        shell.x = Math.random() * innerWidth;
+        shell.y = innerHeight + 10;
+        shell.vx = (targetX - shell.x) * 0.006 + (Math.random() - 0.5) * 3;
+        shell.vy = -(Math.random() * 6 + 8);
+        shell.r = 3 + Math.random() * 2;
+        shell.color = `hsl(${Math.floor(Math.random() * 360)} 92% 60%)`;
+        shell.shell = true;
+        shell.maxLife = 0; // we'll use explode Y threshold
+        shell._explodeY = targetY + (Math.random() * 80 - 40);
+        shell._payload = payload;
+        fireworks.push(shell);
+      }
+
+      function explode(x, y, n = 48) {
+        for (let i = 0; i < n; i++) {
+          const f = firePool.acquire();
+          const dir = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 4 + 1.2;
+          f.x = x;
+          f.y = y;
+          f.vx = Math.cos(dir) * speed;
+          f.vy = Math.sin(dir) * speed * 0.9;
+          f.r = Math.random() * 2.6 + 1;
+          f.color = `hsl(${Math.floor(Math.random() * 360)} 92% 64%)`;
+          f.life = 0;
+          f.maxLife = 60 + Math.random() * 40;
+          f.shell = false;
+          fireworks.push(f);
+        }
+      }
+
+      /* --------------------
+         Recycle & draw loop
+         -------------------- */
+      let visible = !document.hidden;
+      document.addEventListener('visibilitychange', () => visible = !document.hidden);
+
+      function draw(timestamp) {
+        if (!visible) { requestAnimationFrame(draw); return; }
+
+        // background sparkles
+        spCtx.clearRect(0, 0, innerWidth, innerHeight);
+        for (let i = 0; i < sparks.length; i++) {
+          const s = sparks[i];
+          s.y -= s.speed;
+          s.x += Math.sin((timestamp * 0.0005) + i) * 0.3;
+          if (s.y < -12) s.y = innerHeight + 12;
+          const g = spCtx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 8);
+          spCtx.globalCompositeOperation = 'lighter';
+          g.addColorStop(0, `rgba(255,255,255,${s.a * 0.9})`);
+          g.addColorStop(1, 'rgba(255,255,255,0)');
+          spCtx.fillStyle = g;
+          spCtx.fillRect(s.x - s.r * 8, s.y - s.r * 8, s.r * 16, s.r * 16);
+          spCtx.globalCompositeOperation = 'source-over';
+        }
+
+        // main FX canvas
+        fxCtx.clearRect(0, 0, innerWidth, innerHeight);
+
+        /* confetti rendering */
+        for (let i = confetti.length - 1; i >= 0; i--) {
+          const p = confetti[i];
+          p.vy += 0.04; // gravity
+          p.vx *= 0.999;
+          p.x += p.vx;
+          p.y += p.vy;
+          p.rot += p.vr;
+
+          if (p.y > innerHeight + 30) {
+            confetti.splice(i, 1);
+            confPool.release(p);
+            continue;
+          }
+          fxCtx.save();
+          fxCtx.translate(p.x, p.y);
+          fxCtx.rotate(p.rot);
+          fxCtx.fillStyle = p.color;
+          if (p.shape === 'circle') {
+            fxCtx.beginPath(); fxCtx.arc(0, 0, p.r, 0, Math.PI * 2); fxCtx.fill();
+          } else {
+            fxCtx.fillRect(-p.r, -p.r, p.r * 2, p.r * 2);
+          }
+          fxCtx.restore();
+        }
+
+        /* fireworks rendering */
+        for (let i = fireworks.length - 1; i >= 0; i--) {
+          const f = fireworks[i];
+          if (f.shell) {
+            // shell travel
+            f.vy += 0.06;
+            f.x += f.vx;
+            f.y += f.vy;
+            fxCtx.beginPath(); fxCtx.fillStyle = f.color; fxCtx.arc(f.x, f.y, f.r * 1.1, 0, Math.PI * 2); fxCtx.fill();
+            if (f.y <= f._explodeY || ++f.life > 160) {
+              // explode into particles
+              explode(f.x, f.y, f._payload || 40);
+              fireworks.splice(i, 1); firePool.release(f);
+            }
+          } else {
+            // particle
+            f.vy += 0.04;
+            f.x += f.vx; f.y += f.vy;
+            const alpha = 1 - (f.life / f.maxLife);
+            fxCtx.globalCompositeOperation = 'lighter';
+            fxCtx.fillStyle = colorWithAlpha(f.color, alpha);
+            fxCtx.beginPath(); fxCtx.arc(f.x, f.y, Math.max(0.6, f.r * (alpha + 0.2)), 0, Math.PI * 2); fxCtx.fill();
+            fxCtx.globalCompositeOperation = 'source-over';
+            if (++f.life >= f.maxLife) {
+              fireworks.splice(i, 1);
+              firePool.release(f);
+            }
+          }
+        }
+
+        requestAnimationFrame(draw);
+      }
+      requestAnimationFrame(draw);
+
+      /* --------------------
+         Utilities
+         -------------------- */
+      function colorWithAlpha(hsl, a) { return hsl.replace('hsl', 'hsla').replace(')', `, ${a})`); }
+
+      /* --------------------
+         Interactions & micro-interactions
+         -------------------- */
+
+      // knobs for toggles / state
+      let confettiOn = confettiBtn.getAttribute('aria-pressed') === 'true';
+      confettiBtn.addEventListener('click', () => {
+        confettiOn = !confettiOn;
+        confettiBtn.setAttribute('aria-pressed', String(confettiOn));
+        announce(confettiOn ? 'Confetti on' : 'Confetti off');
+      });
+
+      // sound toggle (opt-in due to autoplay policies)
+      let audioCtx = null, soundOn = false, ambientInterval = null;
+      soundBtn.addEventListener('click', () => {
+        soundOn = !soundOn;
+        soundBtn.setAttribute('aria-pressed', String(soundOn));
+        announce(soundOn ? 'Sound on' : 'Sound off');
+        if (soundOn && !audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          startAmbient();
+        } else if (!soundOn && ambientInterval) {
+          clearInterval(ambientInterval); ambientInterval = null;
+        }
+      });
+
+      // small audio synth helpers
+      function playOsc(freq, type = 'sine', when = 0, dur = 0.16, vol = 0.04) {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, audioCtx.currentTime + when);
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime + when);
+        g.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime + when + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + when + dur);
+        o.connect(g).connect(audioCtx.destination);
+        o.start(audioCtx.currentTime + when); o.stop(audioCtx.currentTime + when + dur + 0.02);
+      }
+      function meow() { playOsc(660, 'sawtooth', 0, 0.28, 0.04); playOsc(420, 'triangle', 0.04, 0.3, 0.06); }
+      function playChime() { [880,1108,1320].forEach((n,i)=> playOsc(n,'sine',i*0.06,0.12,0.03)); }
+      function startAmbient() {
+        if (!audioCtx) return;
+        let i = 0;
+        ambientInterval = setInterval(()=> {
+          const base = 440;
+          const steps = [0,3,7,10];
+          const step = steps[i % steps.length];
+          playOsc(base * Math.pow(2, step/12), 'sine', 0, 0.18, 0.02);
+          i++;
+        }, 420);
+      }
+
+      // cat click -> big celebration
+      cat.addEventListener('click', (e) => {
+        const rect = cat.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height * 0.26;
+        if (confettiOn) spawnConfetti(cx, cy, 120, true);
+        launchFirework(cx, cy - 40, 32);
+        wiggle(hatGroup, 700);
+        wiggle(tailGroup, 700, -18);
+        cameraShake(10, 360);
+        if (soundOn) meow();
+      });
+
+      // Cheer -> strong burst
+      cheerBtn.addEventListener('click', () => {
+        const cx = innerWidth / 2, cy = innerHeight * 0.35;
+        if (confettiOn) spawnConfetti(cx, cy, 180, true);
+        for (let i = 0; i < 4; i++) setTimeout(()=> launchFirework(innerWidth*(0.2 + i*0.18), cy, 36), i*140);
+        cameraShake(14, 480);
+        if (soundOn) playChime();
+      });
+
+      // Balloons -> spawn ascending decorative balloons
+      balloonsBtn.addEventListener('click', () => {
+        for (let i = 0; i < 8; i++) spawnBalloon();
+      });
+
+      // wiggle helper (element.animate ensures GPU-driven)
+      function wiggle(el, duration = 600, angle = 8) {
+        if (!el || prefersReduced) return;
+        el.animate([
+          { transform: `translateY(0) rotate(0deg)` },
+          { transform: `translateY(-6px) rotate(${ -angle }deg)` },
+          { transform: `translateY(0) rotate(${ angle }deg)` },
+          { transform: `translateY(0) rotate(0deg)` }
+        ], { duration: duration, easing: 'cubic-bezier(.22,.61,.36,1)' });
+      }
+
+      // camera shake: subtle translation of hero
+      function cameraShake(intensity = 8, duration = 320) {
+        if (prefersReduced) return;
+        const hero = document.querySelector('.hero');
+        const start = performance.now();
+        function tick(now) {
+          const t = (now - start) / duration;
+          if (t >= 1) { hero.style.transform = ''; return; }
+          const amp = intensity * (1 - t);
+          const x = (Math.random() * 2 - 1) * amp;
+          const y = (Math.random() * 2 - 1) * amp * 0.6;
+          hero.style.transform = `translate3d(${x}px, ${y}px, 0)`;
+          requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+      }
+
+      // basic balloon spawn (DOM, short-lived)
+      function spawnBalloon() {
+        const b = document.createElement('div');
+        b.className = 'balloon';
+        b.style.left = Math.random() * 88 + '%';
+        const hue = Math.floor(Math.random() * 360);
+        b.style.background = `linear-gradient(180deg,hsl(${hue} 85% 68%), color-mix(in oklab, white 70%, transparent))`;
+        document.body.appendChild(b);
+        const duration = 7000 + Math.random() * 6000;
+        const start = performance.now();
+        function float(now) {
+          const t = (now - start) / duration;
+          b.style.transform = `translateY(${(1 - t) * 140}px) rotate(${Math.sin(t*8)*8}deg)`;
+          b.style.opacity = String(1 - t*0.6);
+          if (t < 1) requestAnimationFrame(float); else b.remove();
+        }
+        requestAnimationFrame(float);
+      }
+
+      /* --------------------
+         Parallax (mouse + device orientation)
+         - throttled & small amplitude for subtle depth
+         -------------------- */
+      let px = 0, py = 0, lastParallax = 0;
+      function onPointer(e) {
+        const clientX = (e.touches ? e.touches[0].clientX : e.clientX) || innerWidth/2;
+        const clientY = (e.touches ? e.touches[0].clientY : e.clientY) || innerHeight/2;
+        px = (clientX / innerWidth - 0.5) * 2; // -1..1
+        py = (clientY / innerHeight - 0.5) * 2;
+      }
+      window.addEventListener('mousemove', onPointer, { passive: true });
+      window.addEventListener('touchmove', onPointer, { passive: true });
+
+      // apply parallax in rAF tick for hero & spark layer
+      (function parallaxLoop() {
+        const now = performance.now();
+        if (!prefersReduced && now - lastParallax > 16) {
+          const hero = document.querySelector('.hero');
+          const fxSpark = document.getElementById('spark');
+          const tx = clamp(px * 10, -30, 30), ty = clamp(py * 8, -24, 24);
+          hero.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+          fxSpark.style.transform = `translate3d(${ -tx * 0.2 }px, ${ -ty * 0.2 }px, 0)`;
+          lastParallax = now;
+        }
+        requestAnimationFrame(parallaxLoop);
+      })();
+
+      function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+      /* --------------------
+         Keyboard easter egg -> 'party' for massive burst
+         -------------------- */
+      let keyBuf = '';
+      window.addEventListener('keydown', (e) => {
+        keyBuf = (keyBuf + e.key.toLowerCase()).slice(-6);
+        if (keyBuf.endsWith('party')) {
+          // massive celebration
+          const cx = innerWidth / 2, cy = innerHeight * 0.32;
+          spawnConfetti(cx, cy, 420, true);
+          for (let i = 0; i < 6; i++) setTimeout(() => launchFirework(innerWidth * (0.14 + i * 0.14), cy, 48), i * 160);
+          if (soundOn) { playChime(); setTimeout(playChime, 280); }
+          keyBuf = '';
+        }
+      });
+
+      /* --------------------
+         background periodic life: soft fireworks & confetti drizzle
+         -------------------- */
+      let periodicTimer = setInterval(() => {
+        if (document.hidden) return;
+        const x = innerWidth * (0.16 + Math.random() * 0.68);
+        const y = innerHeight * (0.22 + Math.random() * 0.18);
+        if (confettiOn) spawnConfetti(x, y, 40, false);
+        launchFirework(x, y, 22);
+      }, 3000);
+
+      // initial gentle drizzle to make the canvas feel alive
+      setTimeout(() => { if (confettiOn) spawnConfetti(innerWidth / 2, innerHeight * 0.24, 120, false); }, 600);
+
+      /* --------------------
+         Helper: UI announcements for accessibility
+         -------------------- */
+      const live = document.createElement('div');
+      live.setAttribute('aria-live', 'polite');
+      live.style.position = 'absolute'; live.style.left = '-9999px';
+      document.body.appendChild(live);
+      function announce(msg) { live.textContent = msg; setTimeout(() => live.textContent = '', 1200); }
+
+      /* --------------------
+         Performance & cleanup
+         -------------------- */
+      window.addEventListener('beforeunload', () => {
+        clearInterval(periodicTimer);
+        if (ambientInterval) clearInterval(ambientInterval);
+      });
+
+      /* --------------------
+         Small public helpers (exposed for testing)
+         -------------------- */
+      window.__epicParty = {
+        spawnConfetti: spawnConfetti,
+        launchFirework: launchFirework,
+        spawnBalloon: spawnBalloon
+      };
+
+      /* --------------------
+         Utilities used earlier but defined later (small hoist)
+         -------------------- */
+      function spawnBalloon() {
+        const b = document.createElement('div');
+        b.className = 'balloon';
+        b.style.left = Math.random() * 88 + '%';
+        const hue = Math.floor(Math.random() * 360);
+        b.style.background = `linear-gradient(180deg,hsl(${hue} 86% 64%), color-mix(in oklab, white 70%, transparent))`;
+        document.body.appendChild(b);
+        const duration = 7000 + Math.random() * 7000;
+        const start = performance.now();
+        function float(now) {
+          const t = (now - start) / duration;
+          b.style.transform = `translateY(${(1 - t) * 160}px) rotate(${Math.sin(t * 9) * 8}deg)`;
+          b.style.opacity = String(1 - t * 0.6);
+          if (t < 1) requestAnimationFrame(float); else b.remove();
+        }
+        requestAnimationFrame(float);
+      }
+
+      // chime helper (small flourish)
+      function playChime() { if (!audioCtx) return; [880, 1108, 1320].forEach((n, i) => playOsc(n, 'sine', i * 0.06, 0.12, 0.03)); }
+      function playOsc(freq, type = 'sine', when = 0, dur = 0.16, vol = 0.04) {
+        if (!audioCtx) return;
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = type; o.frequency.setValueAtTime(freq, audioCtx.currentTime + when);
+        g.gain.setValueAtTime(0.0001, audioCtx.currentTime + when);
+        g.gain.exponentialRampToValueAtTime(vol, audioCtx.currentTime + when + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + when + dur);
+        o.connect(g).connect(audioCtx.destination);
+        o.start(audioCtx.currentTime + when); o.stop(audioCtx.currentTime + when + dur + 0.02);
+      }
+
+      /* --------------------
+         End
+         -------------------- */
+
+    })();
+  </script>
+</body>
+</html>
